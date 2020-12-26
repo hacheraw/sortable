@@ -1,0 +1,27 @@
+{
+    "name": "hacheraw/sortable",
+    "description": "CakePHP Sortable Behavior",
+    "type": "cakephp-plugin",
+    "keywords": ["cakephp", "sort", "sortable", "order"],
+    "homepage": "https://github.com/hacheraw/sortable",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jorge Fernández",
+            "role": "Author",
+            "homepage": "https://jorgeff.com"
+        }
+    ],
+    "require": {
+        "cakephp/cakephp": "^3.0 | ^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sortable\\": "src/"
+        }
+    },
+    "support": {
+        "source": "https://github.com/hacheraw/sortable",
+        "issues": "https://github.com/hacheraw/sortable/issues"
+    }
+}
