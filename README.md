@@ -42,7 +42,9 @@ class ElementsTable extends Table
 
         // Add the behavior to your table
         $this->addBehavior('Sortable.Sortable', [
-            'field' => 'name_of_the_field' // default name is `position`
+            'field' => 'name_of_the_field', // default name is `position`
+            'start' => 1, // First item of the list (where to start counting from)
+            'steps' => 1 // How much to add or substract
             ]
         );
     }
@@ -50,8 +52,10 @@ class ElementsTable extends Table
 
 ### Controller action example
 
+Sortable updates all values when you edit or insert a new record. In addition, you can manually call the following functions:
+
 ```php
-// ElementsController::action()
+// Controller::action()
 
     // Move the row to a new position
     $this->Elements->move($row_id, $new_place);
@@ -61,6 +65,25 @@ class ElementsTable extends Table
 
     // Move the row to the bottom
     $this->Elements->toBottom($row_id);
+```
+
+### View input example
+
+```php
+    // Controller::action()
+
+    // Passing variables to the View
+    $this->set('min', $this->Proceedings->ProceedingColumns->getStart());
+    $this->set('max', $this->Proceedings->ProceedingColumns->getLast()); // When editing order of existing row
+    $this->set('max', $this->Proceedings->ProceedingColumns->getNew()); // When adding a new row
+    $this->set('step', $this->Proceedings->ProceedingColumns->getStep());
+```
+
+```php
+    // View
+
+    echo $this->Form->control('position', ['min' => $min, 'max' => $max, 'step' => $step, ]); // When editing order of existing row
+    echo $this->Form->control('position', ['min' => $min, 'max' => $max, 'step' => $step, 'value' => $max]); // When adding a new row
 ```
 
 ## Notes
