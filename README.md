@@ -43,6 +43,7 @@ class ElementsTable extends Table
         // Add the behavior to your table
         $this->addBehavior('Sortable.Sortable', [
             'field' => 'name_of_the_field', // default name is `position`
+            'group' => [], // If there are associations you must set the foreign keys. eg: ['post_id']
             'start' => 1, // First item of the list (where to start counting from)
             'steps' => 1 // How much to add or substract
             ]
@@ -72,10 +73,17 @@ Sortable updates all values when you edit or insert a new record. In addition, y
 ```php
     // Controller::action()
 
+    /**
+     * If there are fields that must be included in where clauses, you must specify them.
+     * For example, if you want to sort post images and images' table has a column named
+     * post_id, then you must add it as a condition.
+     */
+    $conditions = ['post_id' => 7];
+
     // Passing variables to the View
     $this->set('min', $this->Proceedings->ProceedingColumns->getStart());
-    $this->set('max', $this->Proceedings->ProceedingColumns->getLast()); // When editing order of existing row
-    $this->set('max', $this->Proceedings->ProceedingColumns->getNew()); // When adding a new row
+    $this->set('max', $this->Proceedings->ProceedingColumns->getLast($conditions)); // When editing order of existing row
+    $this->set('max', $this->Proceedings->ProceedingColumns->getNew($conditions)); // When adding a new row
     $this->set('step', $this->Proceedings->ProceedingColumns->getStep());
 ```
 

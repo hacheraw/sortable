@@ -22,9 +22,13 @@ class SortableBehavior extends Behavior
      */
     protected $_defaultConfig = [
         'field' => 'position', // "order" es una palabra reservada, no debería usarse como columna en MySQL
+        'group' => [], // Si hay asociaciones, hay que poner el foreign_key para que filtre correctamente. Ej: ['post_id']
         'start' => 1, // Primer elemento de la lista (desde dónde se empieza a contar)
         'step' => 1 // Cuánto sumar o restar
     ];
+
+    protected $fields; // Campos para las búsquedas
+    protected $row; // Entity a modificar
 
     /**
      * Initialize hook
@@ -37,11 +41,7 @@ class SortableBehavior extends Behavior
      */
     public function initialize(array $config): void
     {
-        if (empty($config['fields'])) {
-            return;
-        }
-
-        $this->setConfig($config, false);
+        $this->fields = array_merge(['id', $this->_config['field']], $this->_config['group']);
     }
 
     /**
@@ -54,9 +54,9 @@ class SortableBehavior extends Behavior
         try {
 
             $field = $this->_config['field'];
-            $row = $this->_table->get($id, ['fields' => ['id', $field]]);
-            $currentVal = $row->{$field};
-            $newVal = $this->_config['start'];
+            $this->row = $this->_table->get($id, ['fields' => $this->fields]);
+            $currentVal = $this->row->{$field};
+            $newVal = $this->getStart();
 
             if ($currentVal == $newVal) {
                 return true;
@@ -66,8 +66,8 @@ class SortableBehavior extends Behavior
             $this->_change($currentVal, false);
 
             // Lo establece como el primero
-            $row->{$field} = $newVal;
-            $this->_table->save($row);
+            $this->row->{$field} = $newVal;
+            $this->_table->save($this->row);
 
         } catch (\Throwable $th) {
             //TODO: Logear error
@@ -87,9 +87,9 @@ class SortableBehavior extends Behavior
         try {
 
             $field = $this->_config['field'];
-            $row = $this->_table->get($id, ['fields' => ['id', $field]]);
-            $currentVal = $row->{$field};
-            $newVal = $this->getLast();
+            $this->row = $this->_table->get($id, ['fields' => $this->fields]);
+            $currentVal = $this->row->{$field};
+            $newVal = $this->getLast($this->_getConditions());
 
             if (!$field) {
                 return false;
@@ -103,8 +103,8 @@ class SortableBehavior extends Behavior
             $this->_change($currentVal);
 
             // Lo establece como el último
-            $row->{$field} = $newVal;
-            $this->_table->save($row);
+            $this->row->{$field} = $newVal;
+            $this->_table->save($this->row);
 
         } catch (\Throwable $th) {
             //TODO: Logear error
@@ -125,10 +125,10 @@ class SortableBehavior extends Behavior
     {
         try {
 
-            $step = $this->_config['step'];
+            $step = $this->getStep();
             $field = $this->_config['field'];
-            $row = $this->_table->get($id, ['fields' => ['id', $field]]);
-            $currentVal = $row->{$field};
+            $this->row = $this->_table->get($id, ['fields' => $this->fields]);
+            $currentVal = $this->row->{$field};
 
             if ($newVal == $currentVal) {
                 return true; // No hacemos nada
@@ -142,8 +142,8 @@ class SortableBehavior extends Behavior
 
             // Le asigna la nueva posición
             if ($moveOwn) {
-                $row->{$field} = $newVal;
-                $this->_table->save($row);
+                $this->row->{$field} = $newVal;
+                $this->_table->save($this->row);
             }
 
         } catch (\Throwable $th) {
@@ -170,9 +170,9 @@ class SortableBehavior extends Behavior
      *
      * @return int|float
      */
-    public function getNew()
+    public function getNew($conditions = [])
     {
-        return $this->getLast() + $this->_config['step'];
+        return $this->getLast($conditions) + $this->getStep();
     }
 
     /**
@@ -188,15 +188,22 @@ class SortableBehavior extends Behavior
     /**
      * Devuelve el valor más alto
      *
+     * @param array $conditions
      * @return int|float
      */
-    public function getLast()
+    public function getLast($conditions = [])
     {
         $field = $this->_config['field'];
-        return $this->_table->find('all', [
-            'fields' => ['id', $field],
+        $query = $this->_table->find('all', [
+            'fields' => $this->fields,
             'order' => ["{$field}" => 'DESC']
-        ])->first()->{$field};
+        ]);
+
+        if (!empty($conditions)) {
+            $query->where($conditions);
+        }
+
+        return $query->first()->{$field} ?? 0;
     }
 
     /**
@@ -208,19 +215,21 @@ class SortableBehavior extends Behavior
      */
     private function _change($value, $substract = true)
     {
-        $step = $this->_config['step'];
+        $step = $this->getStep();
         $field = $this->_config['field'];
         $operator = $substract ? '-' : '+'; // Resta o suma
         $expression = new QueryExpression("`{$field}` = `{$field}` {$operator} {$step}");
+        $conditions = $this->_getConditions();
 
         if (!is_array($value)) {
             // Modifica todos los que estén por encima o por debajo
             $operator = $substract ? '>' : '<';
-            $this->_table->updateAll([$expression], ["{$field} {$operator}" => $value]);
+            $this->_table->updateAll([$expression], array_merge($conditions, ["{$field} {$operator}" => $value]));
         } else {
             // Modifica los que están dentro del rango
-            $expression2 = new QueryExpression("`{$field}` BETWEEN {$value[0]} AND {$value[1]}");
-            $this->_table->updateAll([$expression], [$expression2]);
+            $between = ["{$field} >=" => $value[0], "{$field} <=" => $value[1]];
+            $conditions = array_merge($between, $conditions);
+            $this->_table->updateAll([$expression], $conditions);
         }
     }
 
@@ -232,10 +241,27 @@ class SortableBehavior extends Behavior
      */
     private function _insert($value)
     {
-        $step = $this->_config['step'];
+        $step = $this->getStep();
         $field = $this->_config['field'];
         $expression = new QueryExpression("`{$field}` = `{$field}` + {$step}");
-        $this->_table->updateAll([$expression], ["{$field} >=" => $value]);
+        $this->_table->updateAll([$expression], array_merge($this->_getConditions(), ["{$field} >=" => $value]));
+    }
+
+    /**
+     * Devuelve condiciones para el Where
+     *
+     * @param \App\Model\Entity $entity
+     * @return void
+     */
+    private function _getConditions()
+    {
+        $group = $this->_config['group'];
+        $conditions = [];
+        foreach ($group as $column) {
+            $conditions[$column] = $this->row->{$column};
+        }
+
+        return $conditions;
     }
 
     /**
@@ -247,7 +273,8 @@ class SortableBehavior extends Behavior
      */
     public function beforeSave(EventInterface $event, EntityInterface $entity)
     {
-        $default = $this->getNew();
+        $this->row = $entity;
+        $default = $this->getNew($this->_getConditions());
         $field = $this->_config['field'];
         if ($entity->isNew()) { // Si es una nueva fila
             if ($entity->{$field} != $default) { // Si no se inserta al final
