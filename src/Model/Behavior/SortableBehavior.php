@@ -70,7 +70,7 @@ class SortableBehavior extends Behavior
             $this->_table->save($this->row);
 
         } catch (\Throwable $th) {
-            //TODO: Logear error
+            // TODO: Logear error
             return false;
         }
 
@@ -107,7 +107,7 @@ class SortableBehavior extends Behavior
             $this->_table->save($this->row);
 
         } catch (\Throwable $th) {
-            //TODO: Logear error
+            // TODO: Logear error
             return false;
         }
 
@@ -147,7 +147,7 @@ class SortableBehavior extends Behavior
             }
 
         } catch (\Throwable $th) {
-            //TODO: Logear error
+            // TODO: Logear error
             return false;
         }
 
@@ -203,7 +203,7 @@ class SortableBehavior extends Behavior
             $query->where($conditions);
         }
 
-        return $query->first()->{$field} ?? 0;
+        return $query->first()->{$field} ?? $this->getStart() - $this->getStep();
     }
 
     /**
@@ -241,10 +241,19 @@ class SortableBehavior extends Behavior
      */
     private function _insert($value)
     {
+        if ($this->isFirst($this->_getConditions())) {
+            return; // Si no hay valores que modificar, no hace nada
+        }
+
         $step = $this->getStep();
         $field = $this->_config['field'];
         $expression = new QueryExpression("`{$field}` = `{$field}` + {$step}");
-        $this->_table->updateAll([$expression], array_merge($this->_getConditions(), ["{$field} >=" => $value]));
+        try {
+            $this->_table->updateAll([$expression], array_merge($this->_getConditions(), ["{$field} >=" => $value]));
+        } catch (\Throwable $th) {
+            // TODO: Cuando se guardan varias entities a la vez, aunque use isFirst(), a partir de la segunda empieza a devolver FALSE, pero realmente no existen aún así que updateAll devuelve false
+            return false;
+        }
     }
 
     /**
@@ -265,6 +274,27 @@ class SortableBehavior extends Behavior
     }
 
     /**
+     * Comprueba si es la primera fila de su grupo
+     *
+     * @param array $conditions
+     * @return int|float
+     */
+    public function isFirst($conditions = [])
+    {
+        $field = $this->_config['field'];
+        $query = $this->_table->find('all', [
+            'fields' => $this->fields,
+            'order' => ["{$field}" => 'DESC']
+        ]);
+
+        if (!empty($conditions)) {
+            $query->where($conditions);
+        }
+
+        return $query->isEmpty();
+    }
+
+    /**
      * Before save listener.
      *
      * @param \Cake\Event\EventInterface $event The beforeSave event that was fired
@@ -277,7 +307,7 @@ class SortableBehavior extends Behavior
         $default = $this->getNew($this->_getConditions());
         $field = $this->_config['field'];
         if ($entity->isNew()) { // Si es una nueva fila
-            if ($entity->{$field} != $default) { // Si no se inserta al final
+            if ($entity->{$field} != $default) { // Si ya hay otros y no se inserta al final
                 $this->_insert($entity->{$field});
             }
         } else if ($entity->isDirty($field)) { // Si se ha modificado el orden
