@@ -267,7 +267,11 @@ class SortableBehavior extends Behavior
         $group = $this->_config['group'];
         $conditions = [];
         foreach ($group as $column) {
-            $conditions[$column] = $this->row->{$column};
+            if (is_null($this->row->{$column})) {
+                $conditions[] = "{$column} IS NULL";
+            } else {
+                $conditions[$column] = $this->row->{$column};
+            }
         }
 
         return $conditions;
