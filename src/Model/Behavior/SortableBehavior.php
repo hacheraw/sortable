@@ -115,6 +115,11 @@ class SortableBehavior extends Behavior
     }
 
     /**
+     * @var bool
+     */
+    private $preventCallOfMoveInEventListener = false;
+
+    /**
      * Mueve un elemento a otra posición
      *
      * @param \App\Model\Entity $id
@@ -142,8 +147,10 @@ class SortableBehavior extends Behavior
 
             // Le asigna la nueva posición
             if ($moveOwn) {
+                $this->preventCallOfMoveInEventListener = true;
                 $this->row->{$field} = $newVal;
                 $this->_table->save($this->row);
+                $this->preventCallOfMoveInEventListener = false;
             }
 
         } catch (\Throwable $th) {
@@ -314,7 +321,11 @@ class SortableBehavior extends Behavior
             if ($entity->{$field} != $default) { // Si ya hay otros y no se inserta al final
                 $this->_insert($entity->{$field});
             }
-        } else if ($entity->isDirty($field)) { // Si se ha modificado el orden
+        } else if (
+            false === $this->preventCallOfMoveInEventListener
+            &&
+            $entity->isDirty($field)
+        ) { // Si se ha modificado el orden
             $this->move($entity->id, $entity->{$field}, false);
         }
     }
